@@ -64,6 +64,24 @@ def version():
         "environment": APP_ENV,
         "payment_status": PAYMENT_STATUS
     })
+    
+@app.route("/products")
+def products():
+    return jsonify({
+        "products": [
+            {
+                "id": 101,
+                "name": "Laptop",
+                "price": 65000
+            },
+            {
+                "id": 102,
+                "name": "Phone",
+                "price": 30000
+            }
+        ]
+    })
+
 
 
 if __name__ == "__main__":
