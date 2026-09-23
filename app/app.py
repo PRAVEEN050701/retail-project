@@ -83,6 +83,42 @@ def products():
     })
 
 
+@app.route("/customers")
+def customers():
+    customer_list = [
+        {
+            "id": 1001,
+            "name": "John",
+            "email": "john@example.com"
+        },
+        {
+            "id": 1002,
+            "name": "David",
+            "email": "david@example.com"
+        },
+        {
+            "id": 1003,
+            "name": "Priya",
+            "email": "priya@example.com"
+        }
+    ]
+
+    search = request.args.get("search")
+
+    if search:
+        search = search.lower()
+
+        customer_list = [
+            customer for customer in customer_list
+            if search in customer["name"].lower()
+            or search in customer["email"].lower()
+        ]
+
+    return jsonify({
+        "customers": customer_list
+    })
+
+
 
 if __name__ == "__main__":
     app.run(
