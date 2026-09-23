@@ -23,9 +23,8 @@ def home():
 # Health endpoint
 @app.route("/health")
 def health():
-    # Normal versions should pass health check.
-    # We will intentionally make 4.2.2 unhealthy later
-    # for the rollback demonstration.
+    # Version 4.2.2 is intentionally unhealthy
+    # for the Jenkins rollback demonstration.
     if APP_VERSION == "4.2.2":
         return jsonify({
             "status": "unhealthy",
