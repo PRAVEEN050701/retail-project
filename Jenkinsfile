@@ -82,7 +82,7 @@ pipeline {
             steps {
 
                 bat """
-                    "C:\Program Files\Git\cmd\git.exe" fetch --tags --force
+                   "C:/Program Files/Git/cmd/git.exe" fetch --tags --force
                     "C:/Program Files/Git/cmd/git.exe" rev-parse --verify refs/tags/v${params.VERSION}
                 """
             }
