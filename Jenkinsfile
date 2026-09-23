@@ -217,12 +217,13 @@ stages {
 
                 if (containerExists == 0) {
 
-                    def oldImage = bat(
-                        script: """
-                            docker inspect ${PROD_CONTAINER} --format="{{.Config.Image}}"
-                        """,
-                        returnStdout: true
-                    ).trim()
+                       def oldImage = bat(
+                           script: """
+                               @echo off
+                               docker inspect ${PROD_CONTAINER} --format="{{.Config.Image}}"
+                           """,
+                           returnStdout: true
+                       ).trim()
 
                     env.OLD_IMAGE = oldImage
 
