@@ -388,12 +388,10 @@ post {
 
                 def rollbackHealth = bat(
                     script: """
-                        curl.exe -f http://localhost:${HOST_PORT}/health
+                        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
                     """,
                     returnStatus: true
                 )
-
-
                 if (rollbackHealth == 0) {
 
                     echo 'ROLLBACK HEALTH CHECK PASSED'
