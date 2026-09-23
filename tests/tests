@@ -1,0 +1,60 @@
+import os
+import sys
+
+# Allow the test to import app.py from the app directory
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "app")
+    )
+)
+
+from app import app
+
+
+def test_home():
+    response = app.test_client().get("/")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["application"] == "retail-platform"
+
+
+def test_health():
+    response = app.test_client().get("/health")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "healthy"
+
+
+def test_payment_defective():
+    os.environ["PAYMENT_STATUS"] = "DEFECTIVE"
+
+    response = app.test_client().get("/payment")
+
+    assert response.status_code == 500
+
+
+def test_payment_fixed():
+    os.environ["PAYMENT_STATUS"] = "FIXED"
+
+    response = app.test_client().get("/payment")
+
+    assert response.status_code == 200
+
+
+def test_version():
+    response = app.test_client().get("/version")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert "version" in data
+    assert "environment" in data
+    assert "payment_status" in data
