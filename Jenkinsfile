@@ -275,11 +275,11 @@ stages {
                 docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
 
                 docker run -d ^
-                --name ${NEW_CONTAINER} ^
+                --name ${PROD_CONTAINER} ^
                 --network ${NETWORK_NAME} ^
                 -p ${HOST_PORT}:${CONTAINER_PORT} ^
                 -e APP_VERSION=${params.VERSION} ^
-                -e APP_ENV=${params.ENVIRONMENT} ^
+                -e APP_ENV=$4.2.1^
                 -e PAYMENT_STATUS=FIXED ^
                 ${IMAGE_NAME}:${params.VERSION}
             """
