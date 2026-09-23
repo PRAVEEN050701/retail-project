@@ -1,427 +1,429 @@
 pipeline {
 
-agent any
+    agent any
 
-parameters {
+    parameters {
 
-    choice(
-        name: 'DEPLOYMENT_ACTION',
-        choices: ['DEPLOY', 'ROLLBACK'],
-        description: 'Choose deployment action'
-    )
+        choice(
+            name: 'DEPLOYMENT_ACTION',
+            choices: ['DEPLOY', 'ROLLBACK'],
+            description: 'Choose deployment action'
+        )
 
-    choice(
-        name: 'ENVIRONMENT',
-        choices: ['UAT', 'PRODUCTION'],
-        description: 'Choose target environment'
-    )
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['UAT', 'PRODUCTION'],
+            description: 'Choose target environment'
+        )
 
-    string(
-        name: 'VERSION',
-        defaultValue: '4.2.1',
-        description: 'Version to deploy'
-    )
+        string(
+            name: 'VERSION',
+            defaultValue: '4.2.1',
+            description: 'Version to deploy'
+        )
 
-    choice(
-        name: 'CONFIRM_PROD',
-        choices: ['NO', 'YES'],
-        description: 'Confirm production deployment'
-    )
-}
+        choice(
+            name: 'CONFIRM_PROD',
+            choices: ['NO', 'YES'],
+            description: 'Confirm production deployment'
+        )
+    }
 
-environment {
+    environment {
 
-    IMAGE_NAME = 'retail-project'
-    PROD_CONTAINER = 'retail-project-prod'
-    NEW_CONTAINER = 'retail-project-new'
-    NETWORK_NAME = 'retail-network'
+        IMAGE_NAME = 'retail-project'
+        PROD_CONTAINER = 'retail-project-prod'
+        NEW_CONTAINER = 'retail-project-new'
+        NETWORK_NAME = 'retail-network'
 
-    HOST_PORT = '8094'
-    CONTAINER_PORT = '8081'
+        HOST_PORT = '8094'
+        CONTAINER_PORT = '8081'
 
-    GIT_EXE = 'C:/Program Files/Git/cmd/git.exe'
-}
+        GIT_EXE = 'C:/Program Files/Git/cmd/git.exe'
+    }
 
-stages {
+    stages {
 
-    stage('Validate Parameters') {
+        stage('Validate Parameters') {
 
-        steps {
+            steps {
 
-            script {
+                script {
 
-                echo '======================================'
-                echo 'DEPLOYMENT CONFIGURATION'
-                echo '======================================'
+                    echo '======================================'
+                    echo 'DEPLOYMENT CONFIGURATION'
+                    echo '======================================'
 
-                echo "Action      : ${params.DEPLOYMENT_ACTION}"
-                echo "Environment : ${params.ENVIRONMENT}"
-                echo "Version     : ${params.VERSION}"
-                echo "Confirm Prod: ${params.CONFIRM_PROD}"
+                    echo "Action      : ${params.DEPLOYMENT_ACTION}"
+                    echo "Environment : ${params.ENVIRONMENT}"
+                    echo "Version     : ${params.VERSION}"
+                    echo "Confirm Prod: ${params.CONFIRM_PROD}"
 
-                echo '======================================'
+                    echo '======================================'
 
-                if (
-                    params.ENVIRONMENT == 'PRODUCTION' &&
-                    params.CONFIRM_PROD != 'YES'
-                ) {
+                    if (
+                        params.ENVIRONMENT == 'PRODUCTION' &&
+                        params.CONFIRM_PROD != 'YES'
+                    ) {
 
-                    error(
-                        'PRODUCTION deployment requires CONFIRM_PROD = YES'
-                    )
+                        error(
+                            'PRODUCTION deployment requires CONFIRM_PROD = YES'
+                        )
+                    }
                 }
             }
         }
-    }
 
 
-    stage('Validate Git Tag') {
+        stage('Validate Git Tag') {
 
-        when {
+            when {
 
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            bat """
-                "${GIT_EXE}" fetch --tags --force
-                "${GIT_EXE}" rev-parse --verify refs/tags/v${params.VERSION}
-            """
-        }
-    }
-
-
-    stage('Identify Commit') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            script {
-
-                def commit = bat(
-                    script: """
-                        "${GIT_EXE}" rev-list -n 1 v${params.VERSION}
-                    """,
-                    returnStdout: true
-                ).trim()
-
-                echo "Selected commit: ${commit}"
-
-                env.DEPLOY_COMMIT = commit
-            }
-        }
-    }
-
-
-    stage('Check Tools') {
-
-        steps {
-
-            echo 'Checking Git...'
-
-            bat """
-                "${GIT_EXE}" --version
-            """
-
-            echo 'Checking Docker...'
-
-            bat 'docker --version'
-        }
-    }
-
-
-    stage('Build Docker Image') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            echo "Building ${IMAGE_NAME}:${params.VERSION}"
-
-            bat """
-                docker build -t ${IMAGE_NAME}:${params.VERSION} .
-            """
-        }
-    }
-
-
-    stage('Verify Docker Image') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            bat """
-                docker image inspect ${IMAGE_NAME}:${params.VERSION}
-            """
-        }
-    }
-
-
-    stage('Create Network') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            bat """
-                docker network inspect ${NETWORK_NAME} >nul 2>&1 || docker network create ${NETWORK_NAME}
-            """
-        }
-    }
-
-
-    stage('Record Previous Production Image') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            script {
-
-                def containerExists = bat(
-                    script: """
-                        docker inspect ${PROD_CONTAINER} >nul 2>&1
-                    """,
-                    returnStatus: true
-                )
-
-                if (containerExists == 0) {
-
-                       def oldImage = bat(
-                           script: """
-                               @echo off
-                               docker inspect ${PROD_CONTAINER} --format="{{.Config.Image}}"
-                           """,
-                           returnStdout: true
-                       ).trim()
-
-                    env.OLD_IMAGE = oldImage
-
-                    echo "OLD PRODUCTION IMAGE: ${env.OLD_IMAGE}"
-
-                } else {
-
-                    echo 'No existing production container found.'
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
                 }
             }
-        }
-    }
 
-
-    stage('Stop Old Production') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            bat """
-                docker rm -f ${PROD_CONTAINER} >nul 2>&1 || exit /b 0
-            """
-
-            echo 'Old production container stopped.'
-        }
-    }
-
-
-    stage('Start New Version') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
-
-            bat """
-                docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
-
-                docker run -d ^
-                --name ${PROD_CONTAINER} ^
-                --network ${NETWORK_NAME} ^
-                -p ${HOST_PORT}:${CONTAINER_PORT} ^
-                -e APP_VERSION=${params.VERSION} ^
-                -e APP_ENV=$4.2.1^
-                -e PAYMENT_STATUS=FIXED ^
-                ${IMAGE_NAME}:${params.VERSION}
-            """
-        }
-    }
-
-
-    stage('Health Check') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            script {
-
-                echo 'Checking application health...'
-
-                def healthResult = bat(
-                    script: """
-                       "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
-                    """,
-                    returnStatus: true
-                )
-
-                if (healthResult != 0) {
-
-                    echo 'HEALTH CHECK FAILED'
-
-                    error(
-                        'New version failed health check'
-                    )
-                }
-
-                echo 'HEALTH CHECK PASSED'
-            }
-        }
-    }
-
-
-    stage('Complete Deployment') {
-
-        when {
-
-            expression {
-                params.DEPLOYMENT_ACTION == 'DEPLOY'
-            }
-        }
-
-        steps {
-
-            script {
-
-                echo "OLD VERSION: ${env.OLD_IMAGE}"
-                echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
+            steps {
 
                 bat """
-                    docker rename ${NEW_CONTAINER} ${PROD_CONTAINER}
+                    "${GIT_EXE}" fetch --tags --force
+                    "${GIT_EXE}" rev-parse --verify refs/tags/v${params.VERSION}
                 """
-
-                echo 'FINAL STATE: DEPLOYMENT SUCCESSFUL'
             }
         }
-    }
-}
 
 
-post {
+        stage('Identify Commit') {
 
-    failure {
+            when {
 
-        script {
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
 
-            echo '======================================'
-            echo 'DEPLOYMENT FAILED'
-            echo 'STARTING AUTOMATIC ROLLBACK'
-            echo '======================================'
+            steps {
+
+                script {
+
+                    def commit = bat(
+                        script: """
+                            "${GIT_EXE}" rev-list -n 1 v${params.VERSION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Selected commit: ${commit}"
+
+                    env.DEPLOY_COMMIT = commit
+                }
+            }
+        }
 
 
-            bat """
-                docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
-            """
+        stage('Check Tools') {
+
+            steps {
+
+                echo 'Checking Git...'
+
+                bat """
+                    "${GIT_EXE}" --version
+                """
+
+                echo 'Checking Docker...'
+
+                bat 'docker --version'
+            }
+        }
 
 
-            if (env.OLD_IMAGE) {
+        stage('Build Docker Image') {
 
-                echo "RESTORING OLD IMAGE: ${env.OLD_IMAGE}"
+            when {
 
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                echo "Building ${IMAGE_NAME}:${params.VERSION}"
+
+                bat """
+                    docker build -t ${IMAGE_NAME}:${params.VERSION} .
+                """
+            }
+        }
+
+
+        stage('Verify Docker Image') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                bat """
+                    docker image inspect ${IMAGE_NAME}:${params.VERSION}
+                """
+            }
+        }
+
+
+        stage('Create Network') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                bat """
+                    docker network inspect ${NETWORK_NAME} >nul 2>&1 || docker network create ${NETWORK_NAME}
+                """
+            }
+        }
+
+
+        stage('Record Previous Production Image') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    def containerExists = bat(
+                        script: """
+                            docker inspect ${PROD_CONTAINER} >nul 2>&1
+                        """,
+                        returnStatus: true
+                    )
+
+                    if (containerExists == 0) {
+
+                        def oldImage = bat(
+                            script: """
+                                @echo off
+                                docker inspect ${PROD_CONTAINER} --format="{{.Config.Image}}"
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        env.OLD_IMAGE = oldImage
+
+                        echo "OLD PRODUCTION IMAGE: ${env.OLD_IMAGE}"
+
+                    } else {
+
+                        echo 'No existing production container found.'
+                    }
+                }
+            }
+        }
+
+
+        stage('Stop Old Production') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
 
                 bat """
                     docker rm -f ${PROD_CONTAINER} >nul 2>&1 || exit /b 0
-
-                    docker run -d ^
-                    --name ${PROD_CONTAINER} ^
-                    --network ${NETWORK_NAME} ^
-                    -p ${HOST_PORT}:${CONTAINER_PORT} ^
-                    -e APP_ENV=PRODUCTION ^
-                    -e PAYMENT_STATUS=FIXED ^
-                    ${env.OLD_IMAGE}
                 """
 
+                echo 'Old production container stopped.'
+            }
+        }
 
-                def rollbackHealth = bat(
-                    script: """
-                        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
-                    """,
-                    returnStatus: true
-                )
-                if (rollbackHealth == 0) {
 
-                    echo 'ROLLBACK HEALTH CHECK PASSED'
-                    echo 'FINAL STATE: ROLLBACK VERIFIED'
+        stage('Start New Version') {
 
-                } else {
+            when {
 
-                    echo 'ROLLBACK HEALTH CHECK FAILED'
-
-                    error(
-                        'ROLLBACK FAILED'
-                    )
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
                 }
+            }
 
-            } else {
+            steps {
 
-                echo 'No previous image found.'
-                echo 'FINAL STATE: ROLLBACK REQUIRED'
+                echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
+
+                bat """
+                    docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
+
+                    docker run -d ^
+                    --name ${NEW_CONTAINER} ^
+                    --network ${NETWORK_NAME} ^
+                    -p ${HOST_PORT}:${CONTAINER_PORT} ^
+                    -e APP_VERSION=${params.VERSION} ^
+                    -e APP_ENV=${params.ENVIRONMENT} ^
+                    -e PAYMENT_STATUS=FIXED ^
+                    ${IMAGE_NAME}:${params.VERSION}
+                """
+            }
+        }
+
+
+        stage('Health Check') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    echo 'Checking application health...'
+
+                    def healthResult = bat(
+                        script: """
+                            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
+                        """,
+                        returnStatus: true
+                    )
+
+                    if (healthResult != 0) {
+
+                        echo 'HEALTH CHECK FAILED'
+
+                        error(
+                            'New version failed health check'
+                        )
+                    }
+
+                    echo 'HEALTH CHECK PASSED'
+                }
+            }
+        }
+
+
+        stage('Complete Deployment') {
+
+            when {
+
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+
+            steps {
+
+                script {
+
+                    echo "OLD VERSION: ${env.OLD_IMAGE}"
+                    echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
+
+                    bat """
+                        docker rename ${NEW_CONTAINER} ${PROD_CONTAINER}
+                    """
+
+                    echo 'FINAL STATE: DEPLOYMENT SUCCESSFUL'
+                }
             }
         }
     }
 
 
-    success {
+    post {
 
-        echo '======================================'
-        echo 'PIPELINE COMPLETED SUCCESSFULLY'
-        echo '======================================'
+        failure {
+
+            script {
+
+                echo '======================================'
+                echo 'DEPLOYMENT FAILED'
+                echo 'STARTING AUTOMATIC ROLLBACK'
+                echo '======================================'
+
+
+                bat """
+                    docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
+                """
+
+
+                if (env.OLD_IMAGE) {
+
+                    echo "RESTORING OLD IMAGE: ${env.OLD_IMAGE}"
+
+
+                    bat """
+                        docker rm -f ${PROD_CONTAINER} >nul 2>&1 || exit /b 0
+
+                        docker run -d ^
+                        --name ${PROD_CONTAINER} ^
+                        --network ${NETWORK_NAME} ^
+                        -p ${HOST_PORT}:${CONTAINER_PORT} ^
+                        -e APP_VERSION=4.2.1 ^
+                        -e APP_ENV=PRODUCTION ^
+                        -e PAYMENT_STATUS=FIXED ^
+                        ${env.OLD_IMAGE}
+                    """
+
+
+                    def rollbackHealth = bat(
+                        script: """
+                            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
+                        """,
+                        returnStatus: true
+                    )
+
+
+                    if (rollbackHealth == 0) {
+
+                        echo 'ROLLBACK HEALTH CHECK PASSED'
+                        echo 'FINAL STATE: ROLLBACK VERIFIED'
+
+                    } else {
+
+                        echo 'ROLLBACK HEALTH CHECK FAILED'
+
+                        error(
+                            'ROLLBACK FAILED'
+                        )
+                    }
+
+                } else {
+
+                    echo 'No previous image found.'
+                    echo 'FINAL STATE: ROLLBACK REQUIRED'
+                }
+            }
+        }
+
+
+        success {
+
+            echo '======================================'
+            echo 'PIPELINE COMPLETED SUCCESSFULLY'
+            echo '======================================'
+        }
     }
 }
 
-
-}
