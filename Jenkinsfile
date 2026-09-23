@@ -301,12 +301,19 @@ stages {
 
                 echo 'Checking application health...'
 
-                def healthResult = bat(
-                    script: """
-                        curl.exe -f http://localhost:${HOST_PORT}/health
-                    """,
-                    returnStatus: true
-                )
+                def healthResult = powershell(
+                script: """
+                    try {
+                        Invoke-WebRequest -Uri "http://localhost:${HOST_PORT}/health" -UseBasicParsing
+                        exit 0
+                    }
+                    catch {
+                        exit 1
+                    }
+                """,
+                returnStatus: true
+            )
+
 
                 if (healthResult != 0) {
 
