@@ -301,19 +301,12 @@ stages {
 
                 echo 'Checking application health...'
 
-                def healthResult = powershell(
-                script: """
-                    try {
-                        Invoke-WebRequest -Uri "http://localhost:${HOST_PORT}/health" -UseBasicParsing
-                        exit 0
-                    }
-                    catch {
-                        exit 1
-                    }
-                """,
-                returnStatus: true
-            )
-
+                def healthResult = bat(
+                    script: """
+                       "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "try { Invoke-WebRequest -Uri 'http://localhost:${HOST_PORT}/health' -UseBasicParsing; exit 0 } catch { exit 1 }"
+                    """,
+                    returnStatus: true
+                )
 
                 if (healthResult != 0) {
 
