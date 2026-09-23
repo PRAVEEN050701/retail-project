@@ -83,7 +83,7 @@ pipeline {
 
                 bat """
                     git fetch --tags --force
-                    git rev-parse --verify refs/tags/v${VERSION}
+                    git rev-parse --verify refs/tags/v${params.VERSION}
                 """
             }
         }
@@ -96,11 +96,11 @@ pipeline {
                 script {
 
                     def commit = bat(
-                        script: "git rev-list -n 1 v${VERSION}",
+                        script: "git rev-list -n 1 v${params.VERSION}",
                         returnStdout: true
                     ).trim()
 
-                    echo "Selected commit: ${commit}"
+                    echo "Selected commit: ${params.commit}"
                 }
             }
         }
@@ -132,10 +132,10 @@ pipeline {
 
             steps {
 
-                echo "Building ${IMAGE_NAME}:${VERSION}"
+                echo "Building ${IMAGE_NAME}:${params.VERSION}"
 
                 bat """
-                    docker build -t ${IMAGE_NAME}:${VERSION} .
+                    docker build -t ${IMAGE_NAME}:${params.VERSION} .
                 """
             }
         }
@@ -146,7 +146,7 @@ pipeline {
             steps {
 
                 bat """
-                    docker image inspect ${IMAGE_NAME}:${VERSION}
+                    docker image inspect ${IMAGE_NAME}:${params.VERSION}
                 """
             }
         }
@@ -209,7 +209,7 @@ pipeline {
 
             steps {
 
-                echo "NEW VERSION: ${IMAGE_NAME}:${VERSION}"
+                echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
 
                 bat """
                     docker rm -f ${NEW_CONTAINER} >nul 2>&1 || exit /b 0
@@ -218,10 +218,10 @@ pipeline {
                     --name ${NEW_CONTAINER} ^
                     --network ${NETWORK_NAME} ^
                     -p ${HOST_PORT}:8081 ^
-                    -e APP_VERSION=${VERSION} ^
+                    -e APP_VERSION=${params.VERSION} ^
                     -e APP_ENV=${ENVIRONMENT} ^
                     -e PAYMENT_STATUS=FIXED ^
-                    ${IMAGE_NAME}:${VERSION}
+                    ${IMAGE_NAME}:${params.VERSION}
                 """
             }
         }
@@ -279,7 +279,7 @@ pipeline {
 
                     echo "OLD VERSION: ${env.OLD_IMAGE}"
 
-                    echo "NEW VERSION: ${IMAGE_NAME}:${VERSION}"
+                    echo "NEW VERSION: ${IMAGE_NAME}:${params.VERSION}"
 
                     bat """
                         docker rm -f ${PROD_CONTAINER} >nul 2>&1 || exit /b 0
