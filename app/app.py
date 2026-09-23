@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 # Configuration comes from environment variables.
 APP_VERSION = os.getenv("APP_VERSION", "4.2.0")
-APP_ENV = os.getenv("APP_ENV", "UAT")
+APP_ENV = os.getenv("APP_ENV", "DEVELOPMENT")
 PAYMENT_STATUS = os.getenv("PAYMENT_STATUS", "FIXED")
 
 
